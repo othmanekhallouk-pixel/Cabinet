@@ -20,7 +20,7 @@ const teams = ['Direction', 'Comptabilité', 'Fiscal', 'Social', 'Juridique', 'A
 
 export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps) {
   const navigate = useNavigate();
-  const { addUser, getAllUsers } = useAuth();
+  const { register, getAllUsers } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -35,6 +35,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -56,26 +57,43 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      const collaborator = {
-        id: Date.now().toString(),
+    
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const userData = {
         email: formData.email,
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: formData.role,
         team: formData.team,
         internalCost: formData.internalCost,
-        isActive: formData.isActive,
-        createdAt: new Date(),
+        isActive: formData.isActive
       };
       
-      // Ajouter l'utilisateur avec ses identifiants
-      addUser(collaborator, formData.password);
+      console.log('=== CRÉATION COLLABORATEUR ===');
+      console.log('Données utilisateur:', userData);
+      console.log('Mot de passe:', formData.password);
       
-      alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
-      navigate('/team');
+      const success = await register(userData, formData.password);
+      
+      if (success) {
+        console.log('✅ Collaborateur créé avec succès');
+        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
+        navigate('/team');
+      } else {
+        console.log('❌ Échec création collaborateur');
+        setErrors({ email: 'Erreur lors de la création du compte' });
+      }
+    } catch (error) {
+      console.error('Erreur création collaborateur:', error);
+      setErrors({ email: 'Erreur lors de la création du compte' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -311,10 +329,20 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
             </button>
             <button
               type="submit"
-              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="h-4 w-4" />
-              <span>Créer le compte</span>
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Création...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Créer le compte</span>
+                </>
+              )}
             </button>
           </div>
         </form>

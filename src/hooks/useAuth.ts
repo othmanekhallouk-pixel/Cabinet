@@ -221,22 +221,27 @@ export const useAuthLogic = () => {
     console.log('Nouvel utilisateur:', newUser);
     console.log('Nouvelles credentials:', newCredential);
 
-    // SAUVEGARDE IMMÉDIATE ET DIRECTE
-    const newUsers = [...users, newUser];
-    const newCredentials = [...userCredentials, newCredential];
+    // Mise à jour des états avec sauvegarde immédiate
+    const updatedUsers = [...users, newUser];
+    const updatedCredentials = [...userCredentials, newCredential];
     
     console.log('Utilisateurs avant:', users.length);
-    console.log('Utilisateurs après:', newUsers.length);
+    console.log('Utilisateurs après:', updatedUsers.length);
+    console.log('Credentials avant:', userCredentials.length);
+    console.log('Credentials après:', updatedCredentials.length);
     
     // Sauvegarder IMMÉDIATEMENT dans localStorage
-    localStorage.setItem('users', JSON.stringify(newUsers));
-    localStorage.setItem('userCredentials', JSON.stringify(newCredentials));
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+    localStorage.setItem('userCredentials', JSON.stringify(updatedCredentials));
     
     // Puis mettre à jour les états
-    setUsers(newUsers);
-    setUserCredentials(newCredentials);
+    setUsers(updatedUsers);
+    setUserCredentials(updatedCredentials);
     
     console.log('=== SAUVEGARDE TERMINÉE ===');
+    console.log('Vérification localStorage users:', JSON.parse(localStorage.getItem('users') || '[]').length);
+    console.log('Vérification localStorage credentials:', JSON.parse(localStorage.getItem('userCredentials') || '[]').length);
+    
     return true;
   };
 
