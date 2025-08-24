@@ -1,292 +1,371 @@
-import React, { useState, useEffect } from 'react';
-import Header from '../Layout/Header';
-import { 
-  Calendar, 
-  Save, 
-  Download, 
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  FileText
-} from 'lucide-react';
-import { mockDeadlines } from '../../data/mockData';
-import { Deadline, DeadlineType, DeadlineStatus } from '../../types';
-import { useClients } from '../../hooks/useClients';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Mail, Phone, Shield, DollarSign, Users, Save, X } from 'lucide-react';
+import { UserRole } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
-const deadlineTypeLabels: Record<DeadlineType, string> = {
-  is: 'IS',
-  ir: 'IR', 
-  vat: 'TVA',
-  foreign_withholding: 'Retenue à la Source Étrangère',
-  vat_withholding: 'Retenue TVA',
-  fees_withholding: 'Retenue Honoraires',
-  registration_duty: 'Droits d\'Enregistrement',
-  tax_package: 'Forfait Fiscal',
-  fees_declaration: 'Déclaration Honoraires',
-  dividends_declaration: 'Déclaration Dividendes',
-  third_party_payments: 'Paiements Tiers',
-  non_resident_payments: 'Paiements Non-Résidents',
-  cnss_amo: 'CNSS/AMO',
-  cimr: 'CIMR'
+interface CreateCollaboratorProps {
+  onCancel: () => void;
+}
+
+const roleLabels: Record<UserRole, string> = {
+  admin: 'Administrateur',
+  manager: 'Manager',
+  collaborator: 'Collaborateur',
+  quality_control: 'Contrôle Qualité',
+  client: 'Client'
 };
 
-const statusColors: Record<DeadlineStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
-  completed: 'bg-green-100 text-green-800 border-green-200',
-  overdue: 'bg-red-100 text-red-800 border-red-200'
-};
+const teams = ['Direction', 'Comptabilité', 'Fiscal', 'Social', 'Juridique', 'Audit'];
 
-const months = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-];
+export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps) {
+  const navigate = useNavigate();
+  const { register, getAllUsers } = useAuth();
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'collaborator' as UserRole,
+    team: '',
+    internalCost: 400,
+    isActive: true,
+    password: '',
+    confirmPassword: ''
+  });
 
-export default function DeadlinesMatrix() {
-  const { clients } = useClients();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [deadlineStatuses, setDeadlineStatuses] = useState<Record<string, DeadlineStatus>>({});
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Charger les statuts sauvegardés
-  useEffect(() => {
-    const savedStatuses = localStorage.getItem(`deadlineMatrix_${selectedYear}`);
-    if (savedStatuses) {
-      setDeadlineStatuses(JSON.parse(savedStatuses));
-    } else {
-      // Initialiser avec les statuts par défaut
-      const initialStatuses: Record<string, DeadlineStatus> = {};
-      mockDeadlines.forEach(deadline => {
-        if (new Date(deadline.dueDate).getFullYear() === selectedYear) {
-          initialStatuses[deadline.id] = deadline.status;
-        }
-      });
-      setDeadlineStatuses(initialStatuses);
-    }
-    setHasUnsavedChanges(false);
-  }, [selectedYear]);
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    const existingUsers = getAllUsers();
 
-  const handleStatusChange = (deadlineId: string, newStatus: DeadlineStatus) => {
-    setDeadlineStatuses(prev => ({
-      ...prev,
-      [deadlineId]: newStatus
-    }));
-    setHasUnsavedChanges(true);
+    if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
+    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email invalide';
+    else if (existingUsers.some(u => u.email === formData.email)) newErrors.email = 'Cet email est déjà utilisé';
+    if (!formData.role) newErrors.role = 'Le rôle est requis';
+    if (!formData.team) newErrors.team = 'L\'équipe est requise';
+    if (formData.internalCost <= 0) newErrors.internalCost = 'Le coût interne doit être positif';
+    if (!formData.password) newErrors.password = 'Le mot de passe est requis';
+    else if (formData.password.length < 6) newErrors.password = 'Le mot de passe doit contenir au moins 6 caractères';
+    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
-    localStorage.setItem(`deadlineMatrix_${selectedYear}`, JSON.stringify(deadlineStatuses));
-    setHasUnsavedChanges(false);
-    alert('Matrice des échéances sauvegardée avec succès !');
-  };
-
-  const handleExport = () => {
-    const data = {
-      year: selectedYear,
-      statuses: deadlineStatuses,
-      exportDate: new Date().toISOString()
-    };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `matrice_echeances_${selectedYear}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const userData = {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+        team: formData.team,
+        internalCost: formData.internalCost,
+        isActive: formData.isActive,
+        lastLogin: undefined
+      };
+      
+      console.log('=== CRÉATION COLLABORATEUR ===');
+      console.log('Données utilisateur:', userData);
+      console.log('Mot de passe:', formData.password);
+      
+      const success = await register(userData, formData.password);
+      
+      if (success) {
+        console.log('✅ Collaborateur créé avec succès');
+        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
+        navigate('/team');
+      } else {
+                            
+                            {/* Checkbox pour marquer comme réalisé */}
+                            <div className="flex items-center mt-2">
+                              <input
+                                type="checkbox"
+                                id={`check-${deadline.id}`}
+                                checked={currentStatus === 'completed'}
+                                onChange={(e) => handleStatusChange(deadline.id, e.target.checked ? 'completed' : 'pending')}
+                                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                              />
+                              <label htmlFor={`check-${deadline.id}`} className="ml-2 text-xs text-gray-700">
+                                Réalisé
+                              </label>
+                            </div>
+        console.log('❌ Échec création collaborateur');
+        setErrors({ email: 'Erreur lors de la création du compte' });
+      }
+    } catch (error) {
+      console.error('Erreur création collaborateur:', error);
+      setErrors({ email: 'Erreur lors de la création du compte' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const getClientName = (clientId: string) => {
-    return clients.find(c => c.id === clientId)?.companyName || 'Client inconnu';
-  };
-
-  const getDeadlinesForMonth = (month: number) => {
-    return mockDeadlines.filter(deadline => {
-      const deadlineDate = new Date(deadline.dueDate);
-      return deadlineDate.getFullYear() === selectedYear && deadlineDate.getMonth() === month;
-    });
-  };
-
-  const getStatusIcon = (status: DeadlineStatus) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'in_progress':
-        return <Clock className="h-4 w-4 text-blue-600" />;
-      case 'overdue':
-        return <AlertTriangle className="h-4 w-4 text-red-600" />;
-      default:
-        return <FileText className="h-4 w-4 text-yellow-600" />;
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <Header 
-        title="Matrice des Échéances" 
-        subtitle={`Vue matricielle des échéances fiscales et sociales - ${selectedYear}`}
-        action={{ 
-          label: hasUnsavedChanges ? 'Sauvegarder' : 'Exporter', 
-          onClick: hasUnsavedChanges ? handleSave : handleExport 
-        }}
-      />
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Notification de modifications non sauvegardées */}
-        {hasUnsavedChanges && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                <span className="text-orange-800 font-medium">Modifications non sauvegardées</span>
-              </div>
-              <button
-                onClick={handleSave}
-                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors duration-200"
-              >
-                Sauvegarder Maintenant
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Contrôles */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setSelectedYear(prev => prev - 1)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <h2 className="text-xl font-semibold text-gray-900">Année {selectedYear}</h2>
-              <button
-                onClick={() => setSelectedYear(prev => prev + 1)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Nouveau Collaborateur</h2>
+              <p className="text-gray-600 text-sm">Créer un compte collaborateur</p>
             </div>
-            
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setSelectedYear(new Date().getFullYear())}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-              >
-                Année Actuelle
-              </button>
-              <button
-                onClick={handleExport}
-                className="flex items-center space-x-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors duration-200"
-              >
-                <Download className="h-4 w-4" />
-                <span>Exporter</span>
-              </button>
-            </div>
+            <button
+              onClick={onCancel}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
-        {/* Matrice par mois */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {months.map((month, index) => {
-            const monthDeadlines = getDeadlinesForMonth(index);
-            
-            return (
-              <div key={month} className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-4 border-b border-gray-100">
-                  <h3 className="font-semibold text-gray-900">{month} {selectedYear}</h3>
-                  <p className="text-sm text-gray-600">{monthDeadlines.length} échéance(s)</p>
-                </div>
-                
-                <div className="p-4 space-y-3">
-                  {monthDeadlines.length > 0 ? (
-                    monthDeadlines.map(deadline => {
-                      const currentStatus = deadlineStatuses[deadline.id] || deadline.status;
-                      
-                      return (
-                        <div key={deadline.id} className="border border-gray-200 rounded-lg p-3">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 text-sm">{deadline.title}</h4>
-                              <p className="text-xs text-gray-600">{getClientName(deadline.clientId)}</p>
-                              <p className="text-xs text-gray-500">
-                                {deadline.dueDate.toLocaleDateString('fr-FR')}
-                              </p>
-                            </div>
-                            <div className="ml-2">
-                              {getStatusIcon(currentStatus)}
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <span className="text-xs font-medium text-gray-700 block">
-                              {deadlineTypeLabels[deadline.type]}
-                            </span>
-                            
-                            <select
-                              value={currentStatus}
-                              onChange={(e) => handleStatusChange(deadline.id, e.target.value as DeadlineStatus)}
-                              className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                              <option value="pending">En attente</option>
-                              <option value="in_progress">En cours</option>
-                              <option value="completed">Terminé</option>
-                              <option value="overdue">En retard</option>
-                            </select>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-8">
-                      <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">Aucune échéance</p>
-                    </div>
-                  )}
-                </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Informations personnelles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+            <p className="text-sm text-gray-600">Statistiques des échéances par statut</p>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prénom *
+              </label>
+              <div className="relative">
+                <CheckCircle className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.firstName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Prénom"
+                />
               </div>
-            );
-          })}
-        </div>
+              {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+            </div>
 
-        {/* Résumé annuel */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">Résumé Annuel {selectedYear}</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.lastName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Nom"
+                />
+              </div>
+              {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
+            </div>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <div className="text-2xl font-bold text-gray-900 mb-1">
-                  {Object.values(deadlineStatuses).filter(s => s === 'completed').length}
-                </div>
-                <p className="text-sm text-gray-600">Terminées</p>
+
+          {/* Contact */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email professionnel *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="prenom.nom@4aconsulting.ma"
+                />
               </div>
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600 mb-1">
-                  {Object.values(deadlineStatuses).filter(s => s === 'in_progress').length}
-                </div>
-                <p className="text-sm text-gray-600">En cours</p>
-              </div>
-              <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600 mb-1">
-                  {Object.values(deadlineStatuses).filter(s => s === 'pending').length}
-                </div>
-                <p className="text-sm text-gray-600">En attente</p>
-              </div>
-              <div className="text-center p-4 bg-red-50 rounded-lg">
-                <div className="text-2xl font-bold text-red-600 mb-1">
-                  {Object.values(deadlineStatuses).filter(s => s === 'overdue').length}
-                </div>
-                <p className="text-sm text-gray-600">En retard</p>
+                <Clock className="h-6 w-6 text-blue-600 mx-auto mb-2" />
+              {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Téléphone
+                <FileText className="h-6 w-6 text-yellow-600 mx-auto mb-2" />
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="tel"
+                  value={formData.phone}
+                <AlertTriangle className="h-6 w-6 text-red-600 mx-auto mb-2" />
+                  onChange={(e) => handleChange('phone', e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="+212 6 XX XX XX XX"
+                />
               </div>
             </div>
           </div>
-        </div>
+
+          {/* Rôle et équipe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rôle *
+              </label>
+              <div className="relative">
+                <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.role}
+                  onChange={(e) => handleChange('role', e.target.value as UserRole)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.role ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  {Object.entries(roleLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Équipe *
+              </label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.team}
+                  onChange={(e) => handleChange('team', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.team ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Sélectionner une équipe</option>
+                  {teams.map(team => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.team && <p className="text-red-600 text-xs mt-1">{errors.team}</p>}
+            </div>
+          </div>
+
+          {/* Coût interne */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Coût interne (DH/jour) *
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="number"
+                value={formData.internalCost}
+                onChange={(e) => handleChange('internalCost', parseInt(e.target.value) || 0)}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.internalCost ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="400"
+                min="0"
+              />
+            </div>
+            {errors.internalCost && <p className="text-red-600 text-xs mt-1">{errors.internalCost}</p>}
+          </div>
+
+          {/* Mot de passe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => handleChange('password', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.password ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmer le mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
+            </div>
+          </div>
+
+          {/* Statut */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={formData.isActive}
+              onChange={(e) => handleChange('isActive', e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+              Compte actif
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Création...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Créer le compte</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
