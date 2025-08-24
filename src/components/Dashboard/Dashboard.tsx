@@ -91,7 +91,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
         setErrors({ email: 'Erreur lors de la création du compte' });
       }
     } catch (error) {
-      console.error('Erreur création collaborateur:', error);
+      console.error('Erreur:', error);
       setErrors({ email: 'Erreur lors de la création du compte' });
     } finally {
       setIsLoading(false);
@@ -112,13 +112,13 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Nouveau Collaborateur</h2>
-              <p className="text-gray-600 text-sm">Créer un compte collaborateur</p>
+              <p className="text-sm text-gray-600 mt-1">Créer un nouveau compte collaborateur</p>
             </div>
             <button
               onClick={onCancel}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5 text-gray-500" />
             </button>
           </div>
         </div>
