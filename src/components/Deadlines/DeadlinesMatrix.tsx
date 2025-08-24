@@ -84,18 +84,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
       
       if (success) {
         console.log('✅ Collaborateur créé avec succès');
-                <span className="text-orange-800 font-medium">Modifications non sauvegardées</span>
-              </div>
-              <button
-                onClick={handleSaveMatrix}
-                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors duration-200"
-              >
-                Sauvegarder Maintenant
-              </button>
-            </div>
-          </div>
-        )}
-
+        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
         navigate('/team');
       } else {
         console.log('❌ Échec création collaborateur');
