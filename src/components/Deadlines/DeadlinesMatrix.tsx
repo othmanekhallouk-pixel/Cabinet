@@ -57,6 +57,10 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleSaveMatrix = () => {
+    // Function implementation
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -84,7 +88,27 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
       
       if (success) {
         console.log('✅ Collaborateur créé avec succès');
-        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
+        
+        // Unsaved changes notification
+        if (true) { // Replace with actual condition
+          return (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                  <span className="text-orange-800 font-medium">Modifications non sauvegardées</span>
+                </div>
+                <button
+                  onClick={handleSaveMatrix}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors duration-200"
+                >
+                  Sauvegarder Maintenant
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         navigate('/team');
       } else {
         console.log('❌ Échec création collaborateur');
