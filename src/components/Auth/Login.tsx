@@ -123,6 +123,7 @@ export default function Login({ onLogin, onForgotPassword }: LoginProps) {
           <p className="text-sm font-medium text-gray-700 mb-2">Comptes de démonstration :</p>
           <div className="space-y-1 text-xs text-gray-600">
             <p><strong>Admin:</strong> admin@4aconsulting.ma / admin123</p>
+            <p><strong>Manager:</strong> othmane@4aconsulting.ma / othmane123</p>
             <p><strong>Manager:</strong> fatima.alami@4aconsulting.ma / manager123</p>
             <p><strong>Collaborateur:</strong> youssef.tahiri@4aconsulting.ma / collab123</p>
           </div>

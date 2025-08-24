@@ -257,7 +257,9 @@ export default function TeamManagement() {
           {user.lastLogin && (
             <div className="flex items-center text-sm text-gray-600">
               <Activity className="h-4 w-4 mr-2" />
-              Dernière connexion: {user.lastLogin.toLocaleDateString('fr-FR')}
+              Dernière connexion: {user.lastLogin instanceof Date ? 
+                user.lastLogin.toLocaleDateString('fr-FR') : 
+                new Date(user.lastLogin).toLocaleDateString('fr-FR')}
             </div>
           )}
         </div>

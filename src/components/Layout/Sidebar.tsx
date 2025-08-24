@@ -64,7 +64,7 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {/* Bouton créer collaborateur pour admin/manager */}
-        {(user.role === 'admin' || user.role === 'manager') && (
+        {user.role === 'admin' && (
           <button
             onClick={handleCreateCollaborator}
             className="w-full flex items-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200 mb-4"
