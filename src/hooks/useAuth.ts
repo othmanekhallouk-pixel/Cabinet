@@ -143,6 +143,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 />
               </div>
               {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+              }
             </div>
 
             <div>
@@ -162,6 +163,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 />
               </div>
               {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
+              }
             </div>
           </div>
 
@@ -184,6 +186,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 />
               </div>
               {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+              }
             </div>
 
             <div>
@@ -224,6 +227,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 </select>
               </div>
               {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
+              }
             </div>
 
             <div>
@@ -246,6 +250,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 </select>
               </div>
               {errors.team && <p className="text-red-600 text-xs mt-1">{errors.team}</p>}
+              }
             </div>
           </div>
 
@@ -268,6 +273,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
               />
             </div>
             {errors.internalCost && <p className="text-red-600 text-xs mt-1">{errors.internalCost}</p>}
+            }
           </div>
 
           {/* Mot de passe */}
@@ -286,6 +292,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 placeholder="••••••••"
               />
               {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+              }
             </div>
 
             <div>
@@ -302,6 +309,7 @@ export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps
                 placeholder="••••••••"
               />
               {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
+              }
             </div>
           </div>
 
