@@ -1,303 +1,353 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole } from '../types';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Mail, Phone, Shield, DollarSign, Users, Save, X } from 'lucide-react';
+import { UserRole } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
-interface UserCredentials {
-  userId: string;
-  email: string;
-  password: string;
+interface CreateCollaboratorProps {
+  onCancel: () => void;
 }
 
-interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  isLoading: boolean;
-  register: (userData: Omit<User, 'id' | 'createdAt'>, password: string) => Promise<boolean>;
-  getAllUsers: () => User[];
-  resetUserPassword: (userId: string, newPassword: string) => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<boolean>;
-  resetPassword: (token: string, newPassword: string) => Promise<void>;
-}
+const roleLabels: Record<UserRole, string> = {
+  admin: 'Administrateur',
+  manager: 'Manager',
+  collaborator: 'Collaborateur',
+  quality_control: 'Contrôle Qualité',
+  client: 'Client'
+};
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const teams = ['Direction', 'Comptabilité', 'Fiscal', 'Social', 'Juridique', 'Audit'];
 
-// Données utilisateurs par défaut - TOUJOURS PRÉSENTS
-const getDefaultUsers = (): User[] => [
-  {
-    id: '1',
-    firstName: 'Admin',
-    lastName: 'System',
-    email: 'admin@4aconsulting.ma',
-    role: 'admin' as UserRole,
-    team: 'Direction',
-    internalCost: 800,
-    isActive: true,
-    createdAt: new Date('2024-01-01'),
-    lastLogin: new Date()
-  },
-  {
-    id: '2',
-    firstName: 'Othmane',
-    lastName: 'Manager',
-    email: 'othmane@4aconsulting.ma',
-    role: 'manager' as UserRole,
-    team: 'Comptabilité',
-    internalCost: 600,
-    isActive: true,
-    createdAt: new Date('2024-01-15'),
-    lastLogin: new Date()
-  },
-  {
-    id: '3',
-    firstName: 'Fatima',
-    lastName: 'Alami',
-    email: 'fatima.alami@4aconsulting.ma',
-    role: 'manager' as UserRole,
-    team: 'Fiscal',
-    internalCost: 600,
-    isActive: true,
-    createdAt: new Date('2024-01-10'),
-    lastLogin: new Date()
-  },
-  {
-    id: '4',
-    firstName: 'Youssef',
-    lastName: 'Tahiri',
-    email: 'youssef.tahiri@4aconsulting.ma',
+export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps) {
+  const navigate = useNavigate();
+  const { register, getAllUsers } = useAuth();
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
     role: 'collaborator' as UserRole,
-    team: 'Comptabilité',
+    team: '',
     internalCost: 400,
     isActive: true,
-    createdAt: new Date('2024-01-05'),
-    lastLogin: new Date()
-  }
-];
+    password: '',
+    confirmPassword: ''
+  });
 
-const getDefaultCredentials = (): UserCredentials[] => [
-  { userId: '1', email: 'admin@4aconsulting.ma', password: 'admin123' },
-  { userId: '2', email: 'othmane@4aconsulting.ma', password: 'othmane123' },
-  { userId: '3', email: 'fatima.alami@4aconsulting.ma', password: 'manager123' },
-  { userId: '4', email: 'youssef.tahiri@4aconsulting.ma', password: 'collab123' }
-];
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
-// Fonction pour charger les utilisateurs avec fallback
-const loadUsers = (): User[] => {
-  try {
-    const saved = localStorage.getItem('users');
-    if (saved) {
-      const parsed = JSON.parse(saved);
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    const existingUsers = getAllUsers();
+
+    if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
+    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email invalide';
+    else if (existingUsers.some(u => u.email === formData.email)) newErrors.email = 'Cet email est déjà utilisé';
+    if (!formData.role) newErrors.role = 'Le rôle est requis';
+    if (!formData.team) newErrors.team = 'L\'équipe est requise';
+    if (formData.internalCost <= 0) newErrors.internalCost = 'Le coût interne doit être positif';
+    if (!formData.password) newErrors.password = 'Le mot de passe est requis';
+    else if (formData.password.length < 6) newErrors.password = 'Le mot de passe doit contenir au moins 6 caractères';
+    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const userData = {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+        team: formData.team,
+        internalCost: formData.internalCost,
+        isActive: formData.isActive,
+        lastLogin: undefined
+      };
       
-      // Convertir les dates string en objets Date
-      const usersWithDates = parsed.map((user: any) => ({
-        ...user,
-        createdAt: user.createdAt ? new Date(user.createdAt) : new Date(),
-        lastLogin: user.lastLogin ? new Date(user.lastLogin) : undefined
-      }));
+      console.log('=== CRÉATION COLLABORATEUR ===');
+      console.log('Données utilisateur:', userData);
+      console.log('Mot de passe:', formData.password);
       
-      // Vérifier que Othmane est présent, sinon le rajouter
-      const hasOthmane = usersWithDates.some((u: User) => u.email === 'othmane@4aconsulting.ma');
-      if (!hasOthmane) {
-        console.log('Othmane manquant, ajout automatique...');
-        const defaultUsers = getDefaultUsers();
-        const othmane = defaultUsers.find(u => u.email === 'othmane@4aconsulting.ma');
-        if (othmane) {
-          usersWithDates.push(othmane);
-          localStorage.setItem('users', JSON.stringify(usersWithDates));
-        }
+      const success = await register(userData, formData.password);
+      
+      if (success) {
+        console.log('✅ Collaborateur créé avec succès');
+        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
+        navigate('/team');
+      } else {
+        console.log('❌ Échec création collaborateur');
+        setErrors({ email: 'Erreur lors de la création du compte' });
       }
-      return usersWithDates;
+    } catch (error) {
+      console.error('Erreur création collaborateur:', error);
+      setErrors({ email: 'Erreur lors de la création du compte' });
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error('Erreur chargement utilisateurs:', error);
-  }
-  return getDefaultUsers();
-};
+  };
 
-// Fonction pour charger les credentials avec fallback
-const loadCredentials = (): UserCredentials[] => {
-  try {
-    const saved = localStorage.getItem('userCredentials');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Vérifier que les credentials d'Othmane sont présents
-      const hasOthmaneCredentials = parsed.some((c: UserCredentials) => c.email === 'othmane@4aconsulting.ma');
-      if (!hasOthmaneCredentials) {
-        console.log('Credentials Othmane manquants, ajout automatique...');
-        const defaultCredentials = getDefaultCredentials();
-        const othmaneCredentials = defaultCredentials.find(c => c.email === 'othmane@4aconsulting.ma');
-        if (othmaneCredentials) {
-          parsed.push(othmaneCredentials);
-          localStorage.setItem('userCredentials', JSON.stringify(parsed));
-        }
-      }
-      return parsed;
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
-  } catch (error) {
-    console.error('Erreur chargement credentials:', error);
-  }
-  return getDefaultCredentials();
-};
-
-export const useAuthLogic = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [users, setUsers] = useState<User[]>(() => loadUsers());
-  const [userCredentials, setUserCredentials] = useState<UserCredentials[]>(() => loadCredentials());
-
-  // Sauvegarder automatiquement dans localStorage
-  useEffect(() => {
-    console.log('Sauvegarde utilisateurs:', users.length);
-    localStorage.setItem('users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    console.log('Sauvegarde credentials:', userCredentials.length);
-    localStorage.setItem('userCredentials', JSON.stringify(userCredentials));
-  }, [userCredentials]);
-
-  // Vérifier si l'utilisateur est connecté au démarrage
-  useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error('Erreur chargement utilisateur connecté:', error);
-      }
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    const credential = userCredentials.find(
-      cred => cred.email === email && cred.password === password
-    );
-    
-    if (credential) {
-      const userData = users.find(u => u.id === credential.userId);
-      if (userData) {
-        // Mettre à jour la dernière connexion
-        const updatedUser = { ...userData, lastLogin: new Date() };
-        const updatedUsers = users.map(u => 
-          u.id === userData.id ? updatedUser : u
-        );
-        
-        setUsers(updatedUsers);
-        setUser(updatedUser);
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-        return true;
-      }
-    }
-    return false;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('currentUser');
-  };
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Nouveau Collaborateur</h2>
+              <p className="text-gray-600 text-sm">Créer un compte collaborateur</p>
+            </div>
+            <button
+              onClick={onCancel}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
 
-  const register = async (userData: Omit<User, 'id' | 'createdAt'>, password: string): Promise<boolean> => {
-    // Vérifier si l'email existe déjà
-    const existingUser = userCredentials.find(cred => cred.email === userData.email);
-    if (existingUser) {
-      console.log('Email déjà existant:', userData.email);
-      return false;
-    }
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Informations personnelles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prénom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.firstName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Prénom"
+                />
+              </div>
+              {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+            </div>
 
-    const newUserId = Date.now().toString();
-    const newUser: User = {
-      ...userData,
-      id: newUserId,
-      createdAt: new Date()
-    };
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.lastName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Nom"
+                />
+              </div>
+              {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
+            </div>
+          </div>
 
-    const newCredential: UserCredentials = {
-      userId: newUserId,
-      email: userData.email,
-      password
-    };
+          {/* Contact */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email professionnel *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="prenom.nom@4aconsulting.ma"
+                />
+              </div>
+              {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+            </div>
 
-    console.log('=== AJOUT NOUVEL UTILISATEUR ===');
-    console.log('Nouvel utilisateur:', newUser);
-    console.log('Nouvelles credentials:', newCredential);
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Téléphone
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleChange('phone', e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="+212 6 XX XX XX XX"
+                />
+              </div>
+            </div>
+          </div>
 
-    // Mise à jour des états avec sauvegarde immédiate
-    const updatedUsers = [...users, newUser];
-    const updatedCredentials = [...userCredentials, newCredential];
-    
-    console.log('Utilisateurs avant:', users.length);
-    console.log('Utilisateurs après:', updatedUsers.length);
-    console.log('Credentials avant:', userCredentials.length);
-    console.log('Credentials après:', updatedCredentials.length);
-    
-    // Sauvegarder IMMÉDIATEMENT dans localStorage
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    localStorage.setItem('userCredentials', JSON.stringify(updatedCredentials));
-    
-    // Puis mettre à jour les états
-    setUsers(updatedUsers);
-    setUserCredentials(updatedCredentials);
-    
-    console.log('=== SAUVEGARDE TERMINÉE ===');
-    console.log('Vérification localStorage users:', JSON.parse(localStorage.getItem('users') || '[]').length);
-    console.log('Vérification localStorage credentials:', JSON.parse(localStorage.getItem('userCredentials') || '[]').length);
-    
-    return true;
-  };
+          {/* Rôle et équipe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rôle *
+              </label>
+              <div className="relative">
+                <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.role}
+                  onChange={(e) => handleChange('role', e.target.value as UserRole)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.role ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  {Object.entries(roleLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
+            </div>
 
-  const getAllUsers = (): User[] => {
-    return users;
-  };
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Équipe *
+              </label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.team}
+                  onChange={(e) => handleChange('team', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.team ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Sélectionner une équipe</option>
+                  {teams.map(team => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.team && <p className="text-red-600 text-xs mt-1">{errors.team}</p>}
+            </div>
+          </div>
 
-  const resetUserPassword = async (userId: string, newPassword: string): Promise<void> => {
-    console.log('Réinitialisation mot de passe pour:', userId);
-    
-    const newCredentials = userCredentials.map(cred =>
-      cred.userId === userId ? { ...cred, password: newPassword } : cred
-    );
-    
-    // Sauvegarde immédiate
-    localStorage.setItem('userCredentials', JSON.stringify(newCredentials));
-    setUserCredentials(newCredentials);
-    
-    console.log('Mot de passe réinitialisé avec succès');
-  };
+          {/* Coût interne */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Coût interne (DH/jour) *
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="number"
+                value={formData.internalCost}
+                onChange={(e) => handleChange('internalCost', parseInt(e.target.value) || 0)}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.internalCost ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="400"
+                min="0"
+              />
+            </div>
+            {errors.internalCost && <p className="text-red-600 text-xs mt-1">{errors.internalCost}</p>}
+          </div>
 
-  const requestPasswordReset = async (email: string): Promise<boolean> => {
-    // Simuler l'envoi d'email de réinitialisation
-    const userExists = userCredentials.some(cred => cred.email === email);
-    console.log('Demande de réinitialisation pour:', email, 'Existe:', userExists);
-    
-    // Dans une vraie application, on enverrait un email ici
-    // Pour la démo, on retourne toujours true pour des raisons de sécurité
-    return true;
-  };
+          {/* Mot de passe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => handleChange('password', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.password ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+            </div>
 
-  const resetPassword = async (token: string, newPassword: string): Promise<void> => {
-    // Simuler la réinitialisation avec token
-    console.log('Réinitialisation avec token:', token);
-    // En production, on vérifierait le token et mettrait à jour le mot de passe
-  };
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmer le mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
+            </div>
+          </div>
 
-  return {
-    user,
-    login,
-    logout,
-    isLoading,
-    register,
-    getAllUsers,
-    resetUserPassword,
-    requestPasswordReset,
-    resetPassword
-  };
-};
+          {/* Statut */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={formData.isActive}
+              onChange={(e) => handleChange('isActive', e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+              Compte actif
+            </label>
+          </div>
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-export { AuthContext };
+          {/* Actions */}
+          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Création...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Créer le compte</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

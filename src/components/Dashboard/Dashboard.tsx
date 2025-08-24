@@ -1,228 +1,352 @@
-import React from 'react';
-import Header from '../Layout/Header';
-import StatsCard from './StatsCard';
-import { 
-  Users, 
-  FolderOpen, 
-  AlertTriangle, 
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  DollarSign,
-  Calendar
-} from 'lucide-react';
-import { mockDashboardStats, mockDeadlines, mockMissions } from '../../data/mockData';
-import { useClients } from '../../hooks/useClients';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Mail, Phone, Shield, DollarSign, Users, Save, X } from 'lucide-react';
+import { UserRole } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
-export default function Dashboard() {
-  const { clients } = useClients();
-  const stats = mockDashboardStats;
-  const upcomingDeadlines = mockDeadlines.filter(d => d.status !== 'completed').slice(0, 5);
-  const recentMissions = mockMissions.filter(m => m.status !== 'completed').slice(0, 5);
+interface CreateCollaboratorProps {
+  onCancel: () => void;
+}
 
-  const handleStatsClick = (type: string) => {
-    switch (type) {
-      case 'clients':
-        window.location.href = '/clients';
-        break;
-      case 'missions':
-        window.location.href = '/missions';
-        break;
-      case 'deadlines':
-        window.location.href = '/deadlines';
-        break;
-      case 'team':
-        window.location.href = '/team';
-        break;
-      default:
-        break;
+const roleLabels: Record<UserRole, string> = {
+  admin: 'Administrateur',
+  manager: 'Manager',
+  collaborator: 'Collaborateur',
+  quality_control: 'Contrôle Qualité',
+  client: 'Client'
+};
+
+const teams = ['Direction', 'Comptabilité', 'Fiscal', 'Social', 'Juridique', 'Audit'];
+
+export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps) {
+  const navigate = useNavigate();
+  const { register, getAllUsers } = useAuth();
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'collaborator' as UserRole,
+    team: '',
+    internalCost: 400,
+    isActive: true,
+    password: '',
+    confirmPassword: ''
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    const existingUsers = getAllUsers();
+
+    if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
+    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email invalide';
+    else if (existingUsers.some(u => u.email === formData.email)) newErrors.email = 'Cet email est déjà utilisé';
+    if (!formData.role) newErrors.role = 'Le rôle est requis';
+    if (!formData.team) newErrors.team = 'L\'équipe est requise';
+    if (formData.internalCost <= 0) newErrors.internalCost = 'Le coût interne doit être positif';
+    if (!formData.password) newErrors.password = 'Le mot de passe est requis';
+    else if (formData.password.length < 6) newErrors.password = 'Le mot de passe doit contenir au moins 6 caractères';
+    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const userData = {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+        team: formData.team,
+        internalCost: formData.internalCost,
+        isActive: formData.isActive,
+        lastLogin: undefined
+      };
+      
+      console.log('=== CRÉATION COLLABORATEUR ===');
+      console.log('Données utilisateur:', userData);
+      console.log('Mot de passe:', formData.password);
+      
+      const success = await register(userData, formData.password);
+      
+      if (success) {
+        console.log('✅ Collaborateur créé avec succès');
+        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
+        navigate('/team');
+      } else {
+        console.log('❌ Échec création collaborateur');
+        setErrors({ email: 'Erreur lors de la création du compte' });
+      }
+    } catch (error) {
+      console.error('Erreur création collaborateur:', error);
+      setErrors({ email: 'Erreur lors de la création du compte' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <Header 
-        title="Tableau de Bord" 
-        subtitle="Vue d'ensemble de l'activité du cabinet"
-      />
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div onClick={() => handleStatsClick('clients')} className="cursor-pointer">
-            <StatsCard
-              title="Total Clients"
-              value={stats.totalClients}
-              icon={Users}
-              trend={{ value: 12, isPositive: true }}
-              color="blue"
-            />
-          </div>
-          <div onClick={() => handleStatsClick('missions')} className="cursor-pointer">
-            <StatsCard
-              title="Missions Actives"
-              value={stats.activeMissions}
-              icon={FolderOpen}
-              trend={{ value: 8, isPositive: true }}
-              color="green"
-            />
-          </div>
-          <div onClick={() => handleStatsClick('deadlines')} className="cursor-pointer">
-            <StatsCard
-              title="Échéances en Attente"
-              value={stats.pendingDeadlines}
-              icon={AlertTriangle}
-              color="yellow"
-            />
-          </div>
-          <div onClick={() => handleStatsClick('team')} className="cursor-pointer">
-            <StatsCard
-            title="Utilisation Équipe"
-            value={`${stats.teamUtilization}%`}
-            icon={TrendingUp}
-            trend={{ value: 5, isPositive: true }}
-            color="green"
-          />
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Nouveau Collaborateur</h2>
+              <p className="text-gray-600 text-sm">Créer un compte collaborateur</p>
+            </div>
+            <button
+              onClick={onCancel}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
-        {/* Secondary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div onClick={() => handleStatsClick('billing')} className="cursor-pointer">
-            <StatsCard
-              title="Chiffre d'Affaires"
-              value={`${stats.revenue.toLocaleString()} DH`}
-              icon={DollarSign}
-              color="blue"
-            />
-          </div>
-          <div onClick={() => handleStatsClick('time')} className="cursor-pointer">
-            <StatsCard
-              title="Heures Enregistrées"
-              value={stats.hoursLogged}
-              icon={Clock}
-              color="green"
-            />
-          </div>
-          <div onClick={() => handleStatsClick('deadlines')} className="cursor-pointer">
-            <StatsCard
-              title="Échéances en Retard"
-              value={stats.overdueDeadlines}
-            icon={AlertTriangle}
-            color="red"
-          />
-          <StatsCard
-            title="Missions Terminées"
-            value={stats.completedMissions}
-            icon={CheckCircle}
-            color="green"
-          />
-        </div>
-        </div>
-
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Upcoming Deadlines */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Échéances Prochaines</h3>
-              <p className="text-gray-600 text-sm">Déclarations et paiements à venir</p>
-            </div>
-            <div className="p-6 space-y-4">
-              {upcomingDeadlines.map((deadline) => (
-                <div key={deadline.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors duration-200">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{deadline.title}</h4>
-                    <p className="text-sm text-gray-600">{deadline.period}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">
-                      {deadline.dueDate.toLocaleDateString('fr-FR')}
-                    </p>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      deadline.priority === 'high' 
-                        ? 'bg-red-100 text-red-700'
-                        : deadline.priority === 'medium'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-green-100 text-green-700'
-                    }`}>
-                      {deadline.priority === 'high' ? 'Urgent' : 
-                       deadline.priority === 'medium' ? 'Moyen' : 'Faible'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Missions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Missions Récentes</h3>
-              <p className="text-gray-600 text-sm">Activité récente du cabinet</p>
-            </div>
-            <div className="p-6 space-y-4">
-              {recentMissions.map((mission) => (
-                <div key={mission.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors duration-200">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{mission.title}</h4>
-                    <p className="text-sm text-gray-600">{mission.type}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="w-24 bg-gray-200 rounded-full h-2 mb-1">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${(mission.consumedHours / mission.budgetHours) * 100}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      {mission.consumedHours}h / {mission.budgetHours}h
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Activity Timeline */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">Activité Récente</h3>
-            <p className="text-gray-600 text-sm">Dernières actions effectuées</p>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-start space-x-4">
-                <div className="w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
-                <div>
-                  <p className="text-sm text-gray-900">
-                    <span className="font-medium">Youssef Tahiri</span> a validé la déclaration TVA pour TechnoMaroc
-                  </p>
-                  <p className="text-xs text-gray-500">Il y a 2 heures</p>
-                </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Informations personnelles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prénom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.firstName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Prénom"
+                />
               </div>
-              <div className="flex items-start space-x-4">
-                <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
-                <div>
-                  <p className="text-sm text-gray-900">
-                    <span className="font-medium">Fatima Alami</span> a approuvé une demande de congé
-                  </p>
-                  <p className="text-xs text-gray-500">Il y a 4 heures</p>
-                </div>
+              {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.lastName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Nom"
+                />
               </div>
-              <div className="flex items-start space-x-4">
-                <div className="w-2 h-2 bg-yellow-600 rounded-full mt-2"></div>
-                <div>
-                  <p className="text-sm text-gray-900">
-                    Nouvelle échéance créée pour <span className="font-medium">AtlasExport</span>
-                  </p>
-                  <p className="text-xs text-gray-500">Il y a 6 heures</p>
-                </div>
+              {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
+            </div>
+          </div>
+
+          {/* Contact */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email professionnel *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="prenom.nom@4aconsulting.ma"
+                />
+              </div>
+              {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Téléphone
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleChange('phone', e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="+212 6 XX XX XX XX"
+                />
               </div>
             </div>
           </div>
-        </div>
+
+          {/* Rôle et équipe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rôle *
+              </label>
+              <div className="relative">
+                <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.role}
+                  onChange={(e) => handleChange('role', e.target.value as UserRole)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.role ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  {Object.entries(roleLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Équipe *
+              </label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.team}
+                  onChange={(e) => handleChange('team', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.team ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Sélectionner une équipe</option>
+                  {teams.map(team => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.team && <p className="text-red-600 text-xs mt-1">{errors.team}</p>}
+            </div>
+          </div>
+
+          {/* Coût interne */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Coût interne (DH/jour) *
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="number"
+                value={formData.internalCost}
+                onChange={(e) => handleChange('internalCost', parseInt(e.target.value) || 0)}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.internalCost ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="400"
+                min="0"
+              />
+            </div>
+            {errors.internalCost && <p className="text-red-600 text-xs mt-1">{errors.internalCost}</p>}
+          </div>
+
+          {/* Mot de passe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => handleChange('password', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.password ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmer le mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
+            </div>
+          </div>
+
+          {/* Statut */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={formData.isActive}
+              onChange={(e) => handleChange('isActive', e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+              Compte actif
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Création...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Créer le compte</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

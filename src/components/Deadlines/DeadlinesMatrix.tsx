@@ -1,431 +1,364 @@
 import React, { useState } from 'react';
-import Header from '../Layout/Header';
-import { 
-  Calendar, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  Filter,
-  Download,
-  Eye,
-  Plus,
-  Upload,
-  FileText,
-  X,
-  Save,
-  Paperclip,
-  User
-} from 'lucide-react';
-import { mockDeadlines } from '../../data/mockData';
-import { DeadlineType, DeadlineStatus } from '../../types';
-import { useClients } from '../../hooks/useClients';
+import { useNavigate } from 'react-router-dom';
+import { User, Mail, Phone, Shield, DollarSign, Users, Save, X } from 'lucide-react';
+import { UserRole } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
-const deadlineTypeLabels: Record<DeadlineType, string> = {
-  is: 'IS',
-  ir: 'IR',
-  vat: 'TVA',
-  foreign_withholding: 'Ret. Source Étrangers',
-  vat_withholding: 'Ret. Source TVA',
-  fees_withholding: 'Ret. Source Honoraires',
-  registration_duty: 'Droit Enregistrement',
-  tax_package: 'Liasse Fiscale',
-  fees_declaration: 'Décl. Honoraires',
-  dividends_declaration: 'Décl. Dividendes',
-  third_party_payments: 'Rém. Tiers',
-  non_resident_payments: 'Rém. Non-Résidents',
-  cnss_amo: 'CNSS/AMO',
-  cimr: 'CIMR'
-};
-
-const monthlyQuarterlyTypes: DeadlineType[] = [
-  'is', 'ir', 'vat', 'foreign_withholding', 'vat_withholding', 'fees_withholding', 'registration_duty', 'cnss_amo', 'cimr'
-];
-
-const annualTypes: DeadlineType[] = [
-  'tax_package', 'fees_declaration', 'dividends_declaration', 'third_party_payments', 'non_resident_payments'
-];
-
-const months = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre', 'Annuel'
-];
-
-type TaskStatus = 'realized' | 'in_progress' | 'not_applicable' | 'client_todo';
-
-const statusLabels: Record<TaskStatus, string> = {
-  realized: 'Réalisé',
-  in_progress: 'En cours',
-  not_applicable: 'Non applicable',
-  client_todo: 'À réaliser par le client'
-};
-
-const statusColors: Record<TaskStatus, string> = {
-  realized: 'bg-green-100 text-green-800 border-green-200',
-  in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
-  not_applicable: 'bg-gray-100 text-gray-800 border-gray-200',
-  client_todo: 'bg-orange-100 text-orange-800 border-orange-200'
-};
-
-interface DeadlineCell {
-  clientId: string;
-  type: DeadlineType;
-  month: number;
-  year: number;
-  status: TaskStatus;
-  documents: string[];
+interface CreateCollaboratorProps {
+  onCancel: () => void;
 }
 
-export default function DeadlinesMatrix() {
-  const { clients } = useClients();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedClient, setSelectedClient] = useState('');
-  const [deadlineCells, setDeadlineCells] = useState<Record<string, DeadlineCell>>({});
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedCell, setSelectedCell] = useState<{clientId: string, type: DeadlineType} | null>(null);
-  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+const roleLabels: Record<UserRole, string> = {
+  admin: 'Administrateur',
+  manager: 'Manager',
+  collaborator: 'Collaborateur',
+  quality_control: 'Contrôle Qualité',
+  client: 'Client'
+};
 
-  const isAnnualView = selectedMonth === 12; // Index 12 = "Annuel"
-  const displayTypes = isAnnualView ? annualTypes : monthlyQuarterlyTypes;
-  const getCellKey = (clientId: string, type: DeadlineType) => {
-    return `${clientId}-${type}-${selectedMonth}-${selectedYear}`;
+const teams = ['Direction', 'Comptabilité', 'Fiscal', 'Social', 'Juridique', 'Audit'];
+
+export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps) {
+  const navigate = useNavigate();
+  const { register, getAllUsers } = useAuth();
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'collaborator' as UserRole,
+    team: '',
+    internalCost: 400,
+    isActive: true,
+    password: '',
+    confirmPassword: ''
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    const existingUsers = getAllUsers();
+
+    if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
+    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email invalide';
+    else if (existingUsers.some(u => u.email === formData.email)) newErrors.email = 'Cet email est déjà utilisé';
+    if (!formData.role) newErrors.role = 'Le rôle est requis';
+    if (!formData.team) newErrors.team = 'L\'équipe est requise';
+    if (formData.internalCost <= 0) newErrors.internalCost = 'Le coût interne doit être positif';
+    if (!formData.password) newErrors.password = 'Le mot de passe est requis';
+    else if (formData.password.length < 6) newErrors.password = 'Le mot de passe doit contenir au moins 6 caractères';
+    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const getDeadlineCell = (clientId: string, type: DeadlineType): DeadlineCell => {
-    const key = getCellKey(clientId, type);
-    const existingDeadline = mockDeadlines.find(d => 
-      d.clientId === clientId && 
-      d.type === type && 
-      new Date(d.dueDate).getMonth() === selectedMonth &&
-      new Date(d.dueDate).getFullYear() === selectedYear
-    );
-
-    return deadlineCells[key] || {
-      clientId,
-      type,
-      month: selectedMonth,
-      year: selectedYear,
-      status: existingDeadline?.status === 'completed' ? 'realized' : 'client_todo',
-      documents: existingDeadline?.documents || []
-    };
-  };
-
-  const updateDeadlineCell = (clientId: string, type: DeadlineType, updates: Partial<DeadlineCell>) => {
-    const key = getCellKey(clientId, type);
-    const currentCell = getDeadlineCell(clientId, type);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    setDeadlineCells(prev => ({
-      ...prev,
-      [key]: { ...currentCell, ...updates }
-    }));
-  };
-
-  const handleStatusChange = (clientId: string, type: DeadlineType, status: TaskStatus) => {
-    updateDeadlineCell(clientId, type, { status });
-  };
-
-  const handleUploadClick = (clientId: string, type: DeadlineType) => {
-    setSelectedCell({ clientId, type });
-    setShowUploadModal(true);
-    setUploadFiles([]);
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    setUploadFiles(files);
-  };
-
-  const handleSaveUpload = () => {
-    if (selectedCell && uploadFiles.length > 0) {
-      const { clientId, type } = selectedCell;
-      const currentCell = getDeadlineCell(clientId, type);
-      const newDocuments = [...currentCell.documents, ...uploadFiles.map(f => f.name)];
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const userData = {
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+        team: formData.team,
+        internalCost: formData.internalCost,
+        isActive: formData.isActive,
+        lastLogin: undefined
+      };
       
-      updateDeadlineCell(clientId, type, {
-        documents: newDocuments,
-        status: 'realized'
-      });
+      console.log('=== CRÉATION COLLABORATEUR ===');
+      console.log('Données utilisateur:', userData);
+      console.log('Mot de passe:', formData.password);
       
-      setShowUploadModal(false);
-      setSelectedCell(null);
-      setUploadFiles([]);
+      const success = await register(userData, formData.password);
       
-      alert(`${uploadFiles.length} document(s) téléchargé(s) avec succès !`);
-    }
-  };
-
-  const getStatusIcon = (status: TaskStatus) => {
-    switch (status) {
-      case 'realized':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'in_progress':
-        return <Clock className="h-4 w-4" />;
-      case 'not_applicable':
-        return <X className="h-4 w-4" />;
-      case 'client_todo':
-        return <User className="h-4 w-4" />;
-      default:
-        return <Calendar className="h-4 w-4" />;
-    }
-  };
-
-  const filteredClients = selectedClient 
-    ? clients.filter(c => c.id === selectedClient)
-    : clients;
-
-  const DeadlineMatrixCell = ({ clientId, type }: { clientId: string, type: DeadlineType }) => {
-    const cell = getDeadlineCell(clientId, type);
-    const hasDocuments = cell.documents.length > 0;
-
-    return (
-      <td className="p-2 border border-gray-200 text-center relative group min-w-32">
-        <div className="space-y-2">
-          {/* Statut */}
-          <select
-            value={cell.status}
-            onChange={(e) => handleStatusChange(clientId, type, e.target.value as TaskStatus)}
-            className={`w-full text-xs px-2 py-1 rounded border-2 ${statusColors[cell.status]} focus:ring-2 focus:ring-blue-500`}
-          >
-            {Object.entries(statusLabels).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-
-          {/* Documents */}
-          <div className="flex items-center justify-center space-x-1">
-            <button
-              onClick={() => handleUploadClick(clientId, type)}
-              className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-200"
-              title="Ajouter document"
-            >
-              <Upload className="h-3 w-3" />
-            </button>
-            
-            {hasDocuments && (
-              <div className="flex items-center space-x-1">
-                <Paperclip className="h-3 w-3 text-blue-600" />
-                <span className="text-xs text-blue-600 font-medium">{cell.documents.length}</span>
-                <button
-                  className="p-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200"
-                  title={`${cell.documents.length} document(s)`}
-                >
-                  <Eye className="h-3 w-3" />
-                </button>
+      if (success) {
+        console.log('✅ Collaborateur créé avec succès');
+                <span className="text-orange-800 font-medium">Modifications non sauvegardées</span>
               </div>
-            )}
+              <button
+                onClick={handleSaveMatrix}
+                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors duration-200"
+              >
+                Sauvegarder Maintenant
+              </button>
+            </div>
           </div>
-        </div>
-      </td>
-    );
+        )}
+
+        navigate('/team');
+      } else {
+        console.log('❌ Échec création collaborateur');
+        setErrors({ email: 'Erreur lors de la création du compte' });
+      }
+    } catch (error) {
+      console.error('Erreur création collaborateur:', error);
+      setErrors({ email: 'Erreur lors de la création du compte' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <Header 
-        title="Matrice des Échéances" 
-        subtitle={`${months[selectedMonth]} ${selectedYear} - ${isAnnualView ? 'Déclarations annuelles' : 'Échéances mensuelles et trimestrielles'}`}
-        action={{ label: 'Nouvelle Échéance', onClick: () => {} }}
-      />
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Filtres */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Année</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value={2023}>2023</option>
-                <option value={2024}>2024</option>
-                <option value={2025}>2025</option>
-              </select>
+              <h2 className="text-xl font-semibold text-gray-900">Nouveau Collaborateur</h2>
+              <p className="text-gray-600 text-sm">Créer un compte collaborateur</p>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Mois</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {months.map((month, index) => (
-                  <option key={index} value={index}>{month}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
-              <select
-                value={selectedClient}
-                onChange={(e) => setSelectedClient(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Tous les clients</option>
-                {clients.map(client => (
-                  <option key={client.id} value={client.id}>{client.companyName}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                <Download className="h-4 w-4" />
-                <span>Exporter</span>
-              </button>
-            </div>
+            <button
+              onClick={onCancel}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
-        {/* Légende */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Légende des Statuts</h3>
-          <div className="flex flex-wrap gap-4 text-xs">
-            {Object.entries(statusLabels).map(([key, label]) => (
-              <div key={key} className="flex items-center space-x-2">
-                <div className={`px-2 py-1 rounded border-2 ${statusColors[key as TaskStatus]}`}>
-                  {getStatusIcon(key as TaskStatus)}
-                </div>
-                <span>{label}</span>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Informations personnelles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prénom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.firstName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Prénom"
+                />
               </div>
-            ))}
-            <div className="flex items-center space-x-2">
-              <Paperclip className="h-4 w-4 text-blue-600" />
-              <span>Avec documents</span>
+              {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nom *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.lastName ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="Nom"
+                />
+              </div>
+              {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
             </div>
           </div>
-        </div>
 
-        {/* Tableau Unique */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {isAnnualView ? 'Déclarations Annuelles' : 'Échéances Mensuelles et Trimestrielles'} - {months[selectedMonth]} {selectedYear}
-            </h3>
-            <p className="text-gray-600 text-sm">
-              {isAnnualView ? 'Déclarations et obligations annuelles' : 'Sélectionnez le statut et ajoutez des documents pour chaque déclaration'}
-            </p>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10">
-                    Client
-                  </th>
-                  {displayTypes.map(type => (
-                    <th key={type} className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase min-w-32">
-                      {deadlineTypeLabels[type]}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredClients.map(client => (
-                  <tr key={client.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900 sticky left-0 bg-white z-10 border-r border-gray-200">
-                      <div>
-                        <p className="font-medium">{client.companyName}</p>
-                        <p className="text-xs text-gray-500">{client.rc}</p>
-                      </div>
-                    </td>
-                    {displayTypes.map(type => (
-                      <DeadlineMatrixCell
-                        key={type}
-                        clientId={client.id}
-                        type={type}
-                      />
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+          {/* Contact */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email professionnel *
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="prenom.nom@4aconsulting.ma"
+                />
+              </div>
+              {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+            </div>
 
-      {/* Modal Upload Documents */}
-      {showUploadModal && selectedCell && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Ajouter Documents</h3>
-                <button
-                  onClick={() => setShowUploadModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Téléphone
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleChange('phone', e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="+212 6 XX XX XX XX"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Rôle et équipe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rôle *
+              </label>
+              <div className="relative">
+                <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.role}
+                  onChange={(e) => handleChange('role', e.target.value as UserRole)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.role ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <p className="text-sm text-gray-600 mt-2">
-                {clients.find(c => c.id === selectedCell.clientId)?.companyName} - {deadlineTypeLabels[selectedCell.type]}
-              </p>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sélectionner les fichiers
-                </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors duration-200">
-                  <input
-                    type="file"
-                    multiple
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="file-upload"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                  />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">Cliquez pour sélectionner ou glissez-déposez</p>
-                    <p className="text-xs text-gray-500 mt-1">PDF, DOC, XLS, Images (max 10MB par fichier)</p>
-                  </label>
-                </div>
-              </div>
-
-              {uploadFiles.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-gray-700">Fichiers sélectionnés :</h4>
-                  {uploadFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <div className="flex items-center space-x-2">
-                        <FileText className="h-4 w-4 text-gray-500" />
-                        <span className="text-sm text-gray-700">{file.name}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {(file.size / 1024 / 1024).toFixed(2)} MB
-                      </span>
-                    </div>
+                  {Object.entries(roleLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
                   ))}
-                </div>
-              )}
+                </select>
+              </div>
+              {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
             </div>
-            
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-4">
-              <button
-                onClick={() => setShowUploadModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleSaveUpload}
-                disabled={uploadFiles.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save className="h-4 w-4" />
-                <span>Enregistrer</span>
-              </button>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Équipe *
+              </label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <select
+                  value={formData.team}
+                  onChange={(e) => handleChange('team', e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.team ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Sélectionner une équipe</option>
+                  {teams.map(team => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </div>
+              {errors.team && <p className="text-red-600 text-xs mt-1">{errors.team}</p>}
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Coût interne */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Coût interne (DH/jour) *
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="number"
+                value={formData.internalCost}
+                onChange={(e) => handleChange('internalCost', parseInt(e.target.value) || 0)}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.internalCost ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="400"
+                min="0"
+              />
+            </div>
+            {errors.internalCost && <p className="text-red-600 text-xs mt-1">{errors.internalCost}</p>}
+          </div>
+
+          {/* Mot de passe */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => handleChange('password', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.password ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmer le mot de passe *
+              </label>
+              <input
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="••••••••"
+              />
+              {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
+            </div>
+          </div>
+
+          {/* Statut */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={formData.isActive}
+              onChange={(e) => handleChange('isActive', e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+              Compte actif
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Création...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>Créer le compte</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
