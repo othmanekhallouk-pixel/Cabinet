@@ -1,352 +1,238 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Shield, DollarSign, Users, Save, X } from 'lucide-react';
-import { UserRole } from '../../types';
-import { useAuth } from '../../hooks/useAuth';
+import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  Building2, 
+  FolderOpen, 
+  Clock, 
+  Users, 
+  Calendar, 
+  AlertTriangle,
+  FileText,
+  DollarSign,
+  BarChart3,
+  Settings,
+  LogOut,
+  ChevronDown,
+  Grid3X3,
+  CalendarDays
+} from 'lucide-react';
+import { User } from '../../types';
 
-interface CreateCollaboratorProps {
-  onCancel: () => void;
+interface SidebarProps {
+  user: User;
+  onLogout: () => void;
 }
 
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Administrateur',
-  manager: 'Manager',
-  collaborator: 'Collaborateur',
-  quality_control: 'Contrôle Qualité',
-  client: 'Client'
-};
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<any>;
+  path: string;
+  roles?: string[];
+  children?: MenuItem[];
+}
 
-const teams = ['Direction', 'Comptabilité', 'Fiscal', 'Social', 'Juridique', 'Audit'];
+const menuItems: MenuItem[] = [
+  {
+    id: 'dashboard',
+    label: 'Tableau de Bord',
+    icon: LayoutDashboard,
+    path: '/',
+  },
+  {
+    id: 'clients',
+    label: 'Clients',
+    icon: Building2,
+    path: '/clients',
+  },
+  {
+    id: 'missions',
+    label: 'Missions',
+    icon: FolderOpen,
+    path: '/missions',
+  },
+  {
+    id: 'time',
+    label: 'Suivi du Temps',
+    icon: Clock,
+    path: '/time',
+  },
+  {
+    id: 'team',
+    label: 'Équipe',
+    icon: Users,
+    path: '/team',
+    roles: ['admin', 'manager'],
+  },
+  {
+    id: 'leaves',
+    label: 'Congés',
+    icon: Calendar,
+    path: '/leaves',
+  },
+  {
+    id: 'deadlines',
+    label: 'Échéances',
+    icon: AlertTriangle,
+    path: '/deadlines',
+    children: [
+      {
+        id: 'deadlines-calendar',
+        label: 'Calendrier',
+        icon: CalendarDays,
+        path: '/deadlines',
+      },
+      {
+        id: 'deadlines-matrix',
+        label: 'Matrice',
+        icon: Grid3X3,
+        path: '/deadlines-matrix',
+      },
+    ],
+  },
+  {
+    id: 'billing',
+    label: 'Facturation',
+    icon: DollarSign,
+    path: '/billing',
+    roles: ['admin', 'manager'],
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: FileText,
+    path: '/documents',
+  },
+  {
+    id: 'reports',
+    label: 'Rapports',
+    icon: BarChart3,
+    path: '/reports',
+    roles: ['admin', 'manager'],
+  },
+  {
+    id: 'settings',
+    label: 'Paramètres',
+    icon: Settings,
+    path: '/settings',
+    roles: ['admin'],
+  },
+];
 
-export default function CreateCollaborator({ onCancel }: CreateCollaboratorProps) {
+export default function Sidebar({ user, onLogout }: SidebarProps) {
+  const location = useLocation();
   const navigate = useNavigate();
-  const { register, getAllUsers } = useAuth();
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    role: 'collaborator' as UserRole,
-    team: '',
-    internalCost: 400,
-    isActive: true,
-    password: '',
-    confirmPassword: ''
-  });
+  const [expandedItems, setExpandedItems] = React.useState<string[]>(['deadlines']);
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    const existingUsers = getAllUsers();
-
-    if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis';
-    if (!formData.email.trim()) newErrors.email = 'L\'email est requis';
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email invalide';
-    else if (existingUsers.some(u => u.email === formData.email)) newErrors.email = 'Cet email est déjà utilisé';
-    if (!formData.role) newErrors.role = 'Le rôle est requis';
-    if (!formData.team) newErrors.team = 'L\'équipe est requise';
-    if (formData.internalCost <= 0) newErrors.internalCost = 'Le coût interne doit être positif';
-    if (!formData.password) newErrors.password = 'Le mot de passe est requis';
-    else if (formData.password.length < 6) newErrors.password = 'Le mot de passe doit contenir au moins 6 caractères';
-    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const toggleExpanded = (itemId: string) => {
+    setExpandedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    setIsLoading(true);
-    
-    try {
-      const userData = {
-        email: formData.email,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        role: formData.role,
-        team: formData.team,
-        internalCost: formData.internalCost,
-        isActive: formData.isActive,
-        lastLogin: undefined
-      };
-      
-      console.log('=== CRÉATION COLLABORATEUR ===');
-      console.log('Données utilisateur:', userData);
-      console.log('Mot de passe:', formData.password);
-      
-      const success = await register(userData, formData.password);
-      
-      if (success) {
-        console.log('✅ Collaborateur créé avec succès');
-        alert(`Collaborateur ${formData.firstName} ${formData.lastName} créé avec succès !`);
-        navigate('/team');
-      } else {
-        console.log('❌ Échec création collaborateur');
-        setErrors({ email: 'Erreur lors de la création du compte' });
-      }
-    } catch (error) {
-      console.error('Erreur création collaborateur:', error);
-      setErrors({ email: 'Erreur lors de la création du compte' });
-    } finally {
-      setIsLoading(false);
-    }
+  const isActive = (path: string) => {
+    return location.pathname === path;
   };
 
-  const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+  const hasAccess = (item: MenuItem) => {
+    return !item.roles || item.roles.includes(user.role);
+  };
+
+  const MenuItem = ({ item, level = 0 }: { item: MenuItem; level?: number }) => {
+    const isExpanded = expandedItems.includes(item.id);
+    const hasChildren = item.children && item.children.length > 0;
+    const active = isActive(item.path);
+
+    if (!hasAccess(item)) {
+      return null;
     }
+
+    return (
+      <div>
+        <button
+          onClick={() => {
+            if (hasChildren) {
+              toggleExpanded(item.id);
+            } else {
+              navigate(item.path);
+            }
+          }}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors duration-200 ${
+            active
+              ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-600'
+              : 'text-gray-700 hover:bg-gray-100'
+          } ${level > 0 ? 'ml-4' : ''}`}
+        >
+          <div className="flex items-center space-x-3">
+            <item.icon className={`h-5 w-5 ${active ? 'text-blue-600' : 'text-gray-500'}`} />
+            <span className="font-medium">{item.label}</span>
+          </div>
+          {hasChildren && (
+            <ChevronDown 
+              className={`h-4 w-4 transition-transform duration-200 ${
+                isExpanded ? 'transform rotate-180' : ''
+              }`} 
+            />
+          )}
+        </button>
+        
+        {hasChildren && isExpanded && (
+          <div className="mt-1 space-y-1">
+            {item.children!.map(child => (
+              <MenuItem key={child.id} item={child} level={level + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Nouveau Collaborateur</h2>
-              <p className="text-gray-600 text-sm">Créer un compte collaborateur</p>
-            </div>
-            <button
-              onClick={onCancel}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
-            >
-              <X className="h-5 w-5" />
-            </button>
+    <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      {/* Logo */}
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+            <span className="text-white font-bold">4A</span>
+          </div>
+          <div>
+            <h1 className="font-bold text-gray-900">4AConsulting</h1>
+            <p className="text-xs text-gray-600">Management Platform</p>
           </div>
         </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Informations personnelles */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Prénom *
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="text"
-                  value={formData.firstName}
-                  onChange={(e) => handleChange('firstName', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.firstName ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                  placeholder="Prénom"
-                />
-              </div>
-              {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
-            </div>
+      {/* Navigation */}
+      <nav className="flex-1 p-4 space-y-2">
+        {menuItems.map(item => (
+          <MenuItem key={item.id} item={item} />
+        ))}
+      </nav>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nom *
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="text"
-                  value={formData.lastName}
-                  onChange={(e) => handleChange('lastName', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.lastName ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                  placeholder="Nom"
-                />
-              </div>
-              {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
-            </div>
+      {/* User Profile */}
+      <div className="p-4 border-t border-gray-200">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+            <span className="text-blue-600 font-medium text-sm">
+              {user.firstName[0]}{user.lastName[0]}
+            </span>
           </div>
-
-          {/* Contact */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email professionnel *
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.email ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                  placeholder="prenom.nom@4aconsulting.ma"
-                />
-              </div>
-              {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Téléphone
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="+212 6 XX XX XX XX"
-                />
-              </div>
-            </div>
+          <div className="flex-1">
+            <p className="font-medium text-gray-900 text-sm">{user.firstName} {user.lastName}</p>
+            <p className="text-xs text-gray-600">{user.team}</p>
           </div>
-
-          {/* Rôle et équipe */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Rôle *
-              </label>
-              <div className="relative">
-                <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <select
-                  value={formData.role}
-                  onChange={(e) => handleChange('role', e.target.value as UserRole)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.role ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                >
-                  {Object.entries(roleLabels).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </div>
-              {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Équipe *
-              </label>
-              <div className="relative">
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <select
-                  value={formData.team}
-                  onChange={(e) => handleChange('team', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.team ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Sélectionner une équipe</option>
-                  {teams.map(team => (
-                    <option key={team} value={team}>{team}</option>
-                  ))}
-                </select>
-              </div>
-              {errors.team && <p className="text-red-600 text-xs mt-1">{errors.team}</p>}
-            </div>
-          </div>
-
-          {/* Coût interne */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Coût interne (DH/jour) *
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="number"
-                value={formData.internalCost}
-                onChange={(e) => handleChange('internalCost', parseInt(e.target.value) || 0)}
-                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.internalCost ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="400"
-                min="0"
-              />
-            </div>
-            {errors.internalCost && <p className="text-red-600 text-xs mt-1">{errors.internalCost}</p>}
-          </div>
-
-          {/* Mot de passe */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mot de passe *
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => handleChange('password', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.password ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="••••••••"
-              />
-              {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirmer le mot de passe *
-              </label>
-              <input
-                type="password"
-                value={formData.confirmPassword}
-                onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="••••••••"
-              />
-              {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
-            </div>
-          </div>
-
-          {/* Statut */}
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={(e) => handleChange('isActive', e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
-              Compte actif
-            </label>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Création...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>Créer le compte</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+        </div>
+        
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center space-x-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="text-sm">Déconnexion</span>
+        </button>
       </div>
     </div>
   );
