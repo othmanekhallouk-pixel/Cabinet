@@ -264,10 +264,8 @@ export interface Deadline {
   updatedAt: Date;
 }
 
-export type DeadlineType = 
-  | 'is' | 'ir' | 'vat' | 'foreign_withholding' | 'vat_withholding' | 'fees_withholding' | 'registration_duty'
-  | 'tax_package' | 'fees_declaration' | 'dividends_declaration' | 'third_party_payments' | 'non_resident_payments'
-  | 'cnss_amo' | 'cimr';
+export type DeadlineType =
+  | 'vat' | 'corporate_tax' | 'income_tax' | 'cnss' | 'amo' | 'cimr';
 
 export type DeadlineStatus = 'pending' | 'in_progress' | 'completed' | 'overdue';
 
